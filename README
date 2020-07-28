@@ -1,0 +1,129 @@
+2018101021
+
+Here we try to create a basic system-call. The first step is to extend the
+current proc structure and add new fields ctime, etime and rtime for
+creation time, end-time and total time respectively of a process. 
+When a new process gets created the kernel code should update the process
+creation time. The run-time should get updated after every clock tick for
+the process. To extract this information from the kernel add a new system
+call which extends wait. The new call will be
+
+ int waitx(int *wtime, int *rtime)
+ 
+The two arguments are pointers to integers to which waitx will assign the
+total number of clock ticks during which process was waiting and total
+number of clock ticks when the process was running. The return values for
+waitx should be same as that of wait system-call.
+Created a test program which utilises the waitx system-call by creating a
+‘time’ like command for the same. 
+
+
+1) ADDING SYSTEM CALL :
+
+- waitx() system call was added modifying user.h , usys.S , syscall.h
+,syscall.c , sysproc.c , defs.h .
+- proc.c contains the actual waitx() system call. Copied the code of wait() and modified it as
+follows -
+-Searched for a zombie child of parent in the proc table.
+-When the child was found , following pointers were updated :
+*wtime= p->etime - p->ctime1 - p->rtime - p->iotime;
+*rtime=p->rtime;
+-sysproc.c is just used to call waitx() which is present in proc.c . The sys_waitx() function in
+sysproc.c although does one job - it passes the
+parameters (rtime,wtime) to the waitx() of proc.c , just like all other system calls do.
+2) MODIFICATIONS DONE TO proc structure
+
+- ctime1 (records CREATION TIME) , etime (records END TIME) , rtime (calculates RUN TIME)
+& iotime (calculates IO TIME ) fields added to
+proc structure of proc.h file
+3) HOW ctime,etime & rtime ARE CALCULATED :
+
+- ctime is recoreded in allocproc() function of proc.c.(When process is born)
+- etime is recorded in exit() function (i.e when child exists, ticks are recorded) of proc.c.
+- rtime is updated in trap() function of trap.c .(IF STATE IS RUNNING , THEN UPDATE rtime)
+- iotime is updated in trap() function of trap.c.(IF STATE IS SLEEPING , THEN UPDATE wtime)
+4) THE time COMMAND
+
+-time inputs a command and exec it normally.
+- the only thing different is that it uses 'waitx()' instead of normal wait().
+-at end it displays rtime and wtime.
+-status returned is also displayed.
+-to get status(IN QUESTION IT WAS ASKED TO RETURN SAME STATUS AS wait() ) wait()
+is called from within waitx().
+
+# Scheduling policies in xv6
+
+This patch of xv6 aims to present 5 different scheduling policies which can be used in xv6.
+The 5 policies implemented: DEFAULT, FCFS, SML, DML and LOTTERY. 
+In order to enable a specific policy, when you launch qemu you have to specify the command above, which will set a flag that wil enable the scheduling policity specified in it.
+
+```
+$ make qemu SCHEDFLAG=FCFS
+```
+
+If the flag isn't defined at launch, then DEFAULT (Round-Robin policy) is used.
+
+## Polices
+
+* [DEFAULT](#default) - This is the default Round-Robin policy which comes with the vanilla version of xv6
+* [FCFS](#fcfs) - **F**irst **C**ome **F**irst **S**erved
+* [PRIORITY](#priority) - Priority algoritm based on priorities values
+* [SML](#sml) - **S**tatic **M**ulti­**L**evel queue scheduling
+* [LOTTERY](#lottery) - Lottery algorithm based on tickets and probability
+
+### DEFAULT - Round Robin
+
+The default algorithm implemented in xv6 it's one of the simplest (with FCFS) and relies on the Round-Robin policy, basically it loops through all the process which are available to run (market with the ```RUNNABLE```) state and give access to
+CPU at each one of them one at a time.
+To schedule processes fairly, a round-robin scheduler generally employs time-sharing, giving each job a time slot or quantum (its allowance of CPU time), and interrupting the job if it is not completed by then. 
+The job is resumed next time a time slot is assigned to that process. 
+If the process terminates or changes its state to waiting during its attributed time quantum, the scheduler selects the first process in the ready queue to execute. 
+In the absence of time-sharing, or if the quanta were large relative to the sizes of the jobs, a process that produced large jobs would be favoured over other processes.
+Round-robin scheduling is simple, easy to implement, and starvation-free.
+
+To enable it and see how DEFAULT works use this command when compiling xv6:
+
+$ make qemu SCHEDFLAG=DEFAULT
+
+### FCFS - First Come First Served
+
+First come first served (FCFS), is the simplest scheduling algorithm. FCFS simply queues processes in the order that they arrive in the ready queue. 
+The scheduling overhead due to using this policy is minimal since context switches only occur upon process termination, and no reorganization of the process queue is required.
+Throughput can be low, because long processes can be holding CPU, waiting the short processes for a long time, so short processes which are in a queue are penalized over the longer ones (known as convoy effect).
+By using this policy we have no starvation, because each process gets chance to be executed after a definite time.
+Turnaround time, waiting time and response time depends on the order of their arrival and can be high for the same reasons above.
+There isn't prioritization, so using this policy we cannot force certain processes to be completed first which means that this system has trouble meeting process deadlines.
+The lack of prioritization means that as long as every process eventually completes, there is no starvation. 
+In an environment where some processes might not complete, there can be starvation since the processes that come next the one which might not complete are never executed.
+
+To enable it and see how FCFS works use this command when compiling xv6:
+
+$ make qemu SCHEDFLAG=FCFS
+
+### PRIORITY - Priority scheduling algoritm
+
+The lower nice value, the higher priority. The highest priority process is selected for next running
+
+    - Tiebreak: round-robin fashion
+    
+- Entering scheduler when
+
+  1. Exiting process
+  
+  2. Sleeping process
+  
+  3. Yielding CPU
+  
+  4. Changing priority
+  
+- You also have to make 2 system calls
+
+  - getpriority
+  
+  - setpriority
+
+- When you call fork(), the child process has the same priority as the parent process.
+
+$ make qemu SCHEDFLAG=PRIORITY
+
+(Install QEMU Emulator , then run the Xv6 code)
